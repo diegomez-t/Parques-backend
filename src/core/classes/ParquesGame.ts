@@ -30,6 +30,17 @@ export interface DiceState {
   values: [number, number];
   hasRolled: boolean;
   rollCount: number; // nombre de lancers ce tour
+  usedDice: number[]; // indices des dés utilisés: [], [0], [1], [0,1]
+}
+
+/**
+ * Mouvement valide avec info sur le dé utilisé
+ */
+export interface ValidMove {
+  pawnId: number;
+  targetPosition: number;
+  diceUsed: 'dice1' | 'dice2' | 'sum'; // quel dé utilise ce mouvement
+  steps: number; // nombre de pas
 }
 
 /**
@@ -68,7 +79,7 @@ const BOARD_CONFIG = {
  */
 export class ParquesGame extends Game {
   private _pawns: Map<string, PawnState[]> = new Map();
-  private _dice: DiceState = { values: [1, 1], hasRolled: false, rollCount: 0 };
+  private _dice: DiceState = { values: [1, 1], hasRolled: false, rollCount: 0, usedDice: [] };
   private _consecutiveDoubles: number = 0;
   private _prisonAttempts: Map<string, number> = new Map();
   private _boardType: 4 | 6;
@@ -76,7 +87,7 @@ export class ParquesGame extends Game {
   private _parquesPhase: ParquesPhase = PARQUES_PHASE.WAITING_ROLL;
   private _selectedPawnId: number | null = null;
   private _mustEat: boolean = false;
-  private _validMoves: Array<{ pawnId: number; targetPosition: number }> = [];
+  private _validMoves: ValidMove[] = [];
 
   constructor(options: CreateGameOptions, config: ParquesConfig = {}) {
     super(options, {
@@ -145,7 +156,7 @@ export class ParquesGame extends Game {
         return this.rollDice(playerId);
 
       case 'move_pawn':
-        return this.movePawn(playerId, data.pawnId as number, data.targetPosition as number);
+        return this.movePawn(playerId, data.pawnId as number, data.targetPosition as number, data.diceUsed as string);
 
       case 'exit_prison':
         return this.exitPrison(playerId);
@@ -178,12 +189,26 @@ export class ParquesGame extends Game {
         break;
 
       case PARQUES_PHASE.WAITING_MOVE:
-        actions.push('move_pawn');
+        if (this._validMoves.length > 0) {
+          actions.push('move_pawn');
+        }
         if (!this._mustEat) actions.push('pass');
         break;
     }
 
     return actions;
+  }
+
+  /**
+   * Retourne les dés disponibles (non utilisés)
+   */
+  private getAvailableDice(): { dice1Available: boolean; dice2Available: boolean; isDouble: boolean } {
+    const isDouble = this._dice.values[0] === this._dice.values[1];
+    return {
+      dice1Available: !this._dice.usedDice.includes(0),
+      dice2Available: !this._dice.usedDice.includes(1),
+      isDouble,
+    };
   }
 
   /**
@@ -200,6 +225,7 @@ export class ParquesGame extends Game {
       values: [dice1, dice2],
       hasRolled: true,
       rollCount: this._dice.rollCount + 1,
+      usedDice: [], // Reset des dés utilisés
     };
 
     const isDouble = dice1 === dice2;
@@ -253,33 +279,63 @@ export class ParquesGame extends Game {
   }
 
   /**
-   * Calcule les mouvements valides
+   * Calcule les mouvements valides en fonction des dés disponibles
    */
   private calculateValidMoves(playerId: string): void {
     const playerPawns = this._pawns.get(playerId) || [];
     const [dice1, dice2] = this._dice.values;
-    const sum = dice1 + dice2;
+    const { dice1Available, dice2Available, isDouble } = this.getAvailableDice();
+    
     this._validMoves = [];
     this._mustEat = false;
 
     for (const pawn of playerPawns) {
       if (pawn.inPrison || pawn.inCielo) continue;
 
-      // Mouvement avec la somme
-      const targetSum = this.calculateTargetPosition(pawn, sum, playerId);
-      if (targetSum !== null) {
-        this._validMoves.push({ pawnId: pawn.id, targetPosition: targetSum });
+      // Si les deux dés sont disponibles, on peut utiliser la somme
+      if (dice1Available && dice2Available && !isDouble) {
+        const sum = dice1 + dice2;
+        const targetSum = this.calculateTargetPosition(pawn, sum, playerId);
+        if (targetSum !== null) {
+          this._validMoves.push({ 
+            pawnId: pawn.id, 
+            targetPosition: targetSum, 
+            diceUsed: 'sum',
+            steps: sum
+          });
+        }
       }
 
-      // Mouvements séparés
-      const target1 = this.calculateTargetPosition(pawn, dice1, playerId);
-      if (target1 !== null) {
-        this._validMoves.push({ pawnId: pawn.id, targetPosition: target1 });
+      // Mouvement avec dé 1 (si disponible)
+      if (dice1Available) {
+        const target1 = this.calculateTargetPosition(pawn, dice1, playerId);
+        if (target1 !== null) {
+          this._validMoves.push({ 
+            pawnId: pawn.id, 
+            targetPosition: target1, 
+            diceUsed: 'dice1',
+            steps: dice1
+          });
+        }
       }
 
-      const target2 = this.calculateTargetPosition(pawn, dice2, playerId);
-      if (target2 !== null) {
-        this._validMoves.push({ pawnId: pawn.id, targetPosition: target2 });
+      // Mouvement avec dé 2 (si disponible et différent du dé 1 ou si c'est un double)
+      if (dice2Available && (dice2 !== dice1 || isDouble)) {
+        const target2 = this.calculateTargetPosition(pawn, dice2, playerId);
+        if (target2 !== null) {
+          // Éviter les doublons pour les doubles
+          const alreadyExists = this._validMoves.some(
+            m => m.pawnId === pawn.id && m.targetPosition === target2 && m.diceUsed === 'dice1'
+          );
+          if (!alreadyExists) {
+            this._validMoves.push({ 
+              pawnId: pawn.id, 
+              targetPosition: target2, 
+              diceUsed: 'dice2',
+              steps: dice2
+            });
+          }
+        }
       }
     }
 
@@ -290,6 +346,8 @@ export class ParquesGame extends Game {
         break;
       }
     }
+
+    console.log(`Valid moves calculated: ${this._validMoves.length} moves, usedDice: [${this._dice.usedDice}]`);
   }
 
   /**
@@ -352,7 +410,7 @@ export class ParquesGame extends Game {
    */
   private wouldCapture(playerId: string, position: number): boolean {
     if (position >= 100) return false; // Dans le chemin final
-    if (this.boardConfig.seguros.includes(position)) return false; // Case de sécurité
+    if ((this.boardConfig.seguros as readonly number[]).includes(position)) return false; // Case de sécurité
 
     for (const [pid, pawns] of this._pawns) {
       if (pid === playerId) continue;
@@ -388,18 +446,22 @@ export class ParquesGame extends Game {
   /**
    * Déplace un pion
    */
-  private movePawn(playerId: string, pawnId: number, targetPosition: number): boolean {
+  private movePawn(playerId: string, pawnId: number, targetPosition: number, diceUsed?: string): boolean {
     const playerPawns = this._pawns.get(playerId);
     if (!playerPawns) return false;
 
     const pawn = playerPawns.find(p => p.id === pawnId);
     if (!pawn) return false;
 
-    // Vérifier que le mouvement est valide
-    const isValidMove = this._validMoves.some(
-      m => m.pawnId === pawnId && m.targetPosition === targetPosition
+    // Trouver le mouvement valide correspondant
+    const validMove = this._validMoves.find(
+      m => m.pawnId === pawnId && m.targetPosition === targetPosition && 
+           (diceUsed ? m.diceUsed === diceUsed : true)
     );
-    if (!isValidMove) return false;
+    if (!validMove) {
+      console.log('Move not valid:', { pawnId, targetPosition, diceUsed });
+      return false;
+    }
 
     // Capturer si nécessaire
     if (targetPosition < 100) {
@@ -407,6 +469,7 @@ export class ParquesGame extends Game {
     }
 
     // Déplacer le pion
+    const oldPosition = pawn.position;
     if (targetPosition >= 100) {
       const llegadaPos = targetPosition - 100;
       pawn.inLlegada = true;
@@ -422,7 +485,23 @@ export class ParquesGame extends Game {
       pawn.position = targetPosition;
     }
 
-    this.recordAction(playerId, 'move_pawn', { pawnId, targetPosition });
+    this.recordAction(playerId, 'move_pawn', { pawnId, targetPosition, diceUsed: validMove.diceUsed });
+
+    // Marquer le(s) dé(s) comme utilisé(s)
+    if (validMove.diceUsed === 'sum') {
+      // Somme = les deux dés sont utilisés
+      this._dice.usedDice = [0, 1];
+    } else if (validMove.diceUsed === 'dice1') {
+      if (!this._dice.usedDice.includes(0)) {
+        this._dice.usedDice.push(0);
+      }
+    } else if (validMove.diceUsed === 'dice2') {
+      if (!this._dice.usedDice.includes(1)) {
+        this._dice.usedDice.push(1);
+      }
+    }
+
+    console.log(`Pawn ${pawnId} moved from ${oldPosition} to ${targetPosition}, usedDice: [${this._dice.usedDice}]`);
 
     // Vérifier victoire
     if (this.checkVictory(playerId)) {
@@ -430,13 +509,36 @@ export class ParquesGame extends Game {
       return true;
     }
 
-    // Si double, rejouer, sinon passer au suivant
+    // Déterminer la prochaine étape
     const isDouble = this._dice.values[0] === this._dice.values[1];
-    if (isDouble && this._consecutiveDoubles < 3) {
-      this._dice.hasRolled = false;
-      this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
+    const allDiceUsed = this._dice.usedDice.length >= 2 || 
+                        (isDouble && this._dice.usedDice.length >= 1); // Pour les doubles, un seul mouvement suffit
+
+    if (allDiceUsed) {
+      // Tous les dés ont été utilisés
+      if (isDouble && this._consecutiveDoubles < 3) {
+        // Double: peut relancer
+        this._dice = { values: [1, 1], hasRolled: false, rollCount: this._dice.rollCount, usedDice: [] };
+        this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
+        this._validMoves = [];
+      } else {
+        // Fin du tour
+        this.endCurrentTurn();
+      }
     } else {
-      this.endCurrentTurn();
+      // Il reste des dés à utiliser - recalculer les mouvements valides
+      this.calculateValidMoves(playerId);
+      
+      // Si plus de mouvements valides, fin du tour
+      if (this._validMoves.length === 0) {
+        if (isDouble && this._consecutiveDoubles < 3) {
+          this._dice = { values: [1, 1], hasRolled: false, rollCount: this._dice.rollCount, usedDice: [] };
+          this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
+        } else {
+          this.endCurrentTurn();
+        }
+      }
+      // Sinon reste en WAITING_MOVE
     }
 
     return true;
@@ -451,7 +553,7 @@ export class ParquesGame extends Game {
     const salida = this.boardConfig.salidas[playerIndex] || 0;
     
     // Si c'est un Seguro (mais pas notre Salida), pas de capture
-    if (this.boardConfig.seguros.includes(position) && position !== salida) {
+    if ((this.boardConfig.seguros as readonly number[]).includes(position) && position !== salida) {
       return;
     }
 
@@ -504,7 +606,7 @@ export class ParquesGame extends Game {
     this.recordAction(playerId, 'exit_prison', { count: pawnsToExit });
 
     // Si double, peut rejouer
-    this._dice.hasRolled = false;
+    this._dice = { values: [1, 1], hasRolled: false, rollCount: this._dice.rollCount, usedDice: [] };
     this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
 
     return true;
@@ -518,6 +620,15 @@ export class ParquesGame extends Game {
       // Règle du "souffler" - si on oublie de manger, un pion retourne en prison
       console.log('Player must eat but passed - penalty!');
       // TODO: Implémenter la pénalité
+    }
+
+    // Si c'est un double et qu'on a utilisé au moins un dé, permettre de relancer
+    const isDouble = this._dice.values[0] === this._dice.values[1];
+    if (isDouble && this._dice.usedDice.length > 0 && this._consecutiveDoubles < 3) {
+      this._dice = { values: [1, 1], hasRolled: false, rollCount: this._dice.rollCount, usedDice: [] };
+      this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
+      this._validMoves = [];
+      return true;
     }
 
     this.endCurrentTurn();
@@ -587,7 +698,7 @@ export class ParquesGame extends Game {
    */
   protected endCurrentTurn(): void {
     super.endCurrentTurn();
-    this._dice = { values: [1, 1], hasRolled: false, rollCount: 0 };
+    this._dice = { values: [1, 1], hasRolled: false, rollCount: 0, usedDice: [] };
     this._consecutiveDoubles = 0;
     this._parquesPhase = PARQUES_PHASE.WAITING_ROLL;
     this._validMoves = [];
@@ -606,6 +717,12 @@ export class ParquesGame extends Game {
       pawnsData[playerId] = pawns.map(p => ({ ...p }));
     }
 
+    // Calculer les dés restants
+    const { dice1Available, dice2Available } = this.getAvailableDice();
+    const remainingDice: number[] = [];
+    if (dice1Available) remainingDice.push(this._dice.values[0]);
+    if (dice2Available) remainingDice.push(this._dice.values[1]);
+
     return {
       ...baseState,
       gameData: {
@@ -613,6 +730,7 @@ export class ParquesGame extends Game {
         boardType: this._boardType,
         pawns: pawnsData,
         dice: this._dice,
+        remainingDice, // Dés encore disponibles
         consecutiveDoubles: this._consecutiveDoubles,
         parquesPhase: this._parquesPhase,
         validMoves: this._validMoves,
@@ -621,4 +739,3 @@ export class ParquesGame extends Game {
     };
   }
 }
-
