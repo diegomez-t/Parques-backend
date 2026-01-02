@@ -18,15 +18,15 @@ export interface IGame extends Document {
     isHost: boolean;
   }[];
   
-  // Configuration
+  // Configuration (4 joueurs uniquement)
   settings: {
-    boardMode: 'FOUR_PLAYERS' | 'SIX_PLAYERS';
+    boardMode: 'FOUR_PLAYERS';
     enableBounce: boolean;
     enableTripleDoubleBonus: boolean;
     enableBlowRule: boolean;
     turnTimeoutMs: number;
     minPlayers: number;
-    maxPlayers: number;
+    maxPlayers: number; // max 4
     isPrivate: boolean;
   };
   
@@ -63,13 +63,13 @@ const GameSchema = new Schema<IGame>(
       isHost: { type: Boolean, default: false },
     }],
     settings: {
-      boardMode: { type: String, enum: ['FOUR_PLAYERS', 'SIX_PLAYERS'], default: 'FOUR_PLAYERS' },
+      boardMode: { type: String, enum: ['FOUR_PLAYERS'], default: 'FOUR_PLAYERS' },
       enableBounce: { type: Boolean, default: true },
       enableTripleDoubleBonus: { type: Boolean, default: false },
       enableBlowRule: { type: Boolean, default: false },
       turnTimeoutMs: { type: Number, default: 60000 },
-      minPlayers: { type: Number, default: 2 },
-      maxPlayers: { type: Number, default: 4 },
+      minPlayers: { type: Number, default: 2, min: 2, max: 4 },
+      maxPlayers: { type: Number, default: 4, min: 2, max: 4 },
       isPrivate: { type: Boolean, default: false },
     },
     status: {

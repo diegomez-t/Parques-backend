@@ -65,9 +65,9 @@ export function registerRoomHandlers(socket: Socket): void {
       return callback({ success: false, error: 'Room not found' });
     }
 
-    // Vérifier que la room n'est pas pleine
-    if (room.isFull) {
-      return callback({ success: false, error: 'Room is full' });
+    // Vérifier que la room n'est pas pleine (max 4 joueurs)
+    if (room.isFull || room.playerCount >= 4) {
+      return callback({ success: false, error: 'Room is full (max 4 players)' });
     }
 
     // Vérifier que le jeu n'est pas en cours

@@ -10,7 +10,7 @@ export const LIMITS = {
   // Room
   ROOM_CODE_LENGTH: 6,
   PLAYERS_MIN: 2,
-  PLAYERS_MAX: 6,
+  PLAYERS_MAX: 4,
   
   // Chat
   CHAT_MESSAGE_MAX: 500,
@@ -31,8 +31,8 @@ export const DEFAULT_SETTINGS = {
 } as const;
 
 /**
- * Couleurs des joueurs
+ * Couleurs des joueurs (4 joueurs maximum)
  */
-export const PLAYER_COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'] as const;
+export const PLAYER_COLORS = ['red', 'blue', 'green', 'yellow'] as const;
 export type PlayerColor = typeof PLAYER_COLORS[number];
 

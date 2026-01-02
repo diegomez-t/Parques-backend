@@ -110,9 +110,16 @@ export class GameRoom<TGame extends Game> {
   }
 
   /**
-   * Met à jour les paramètres
+   * Met à jour les paramètres (avec validation max 4 joueurs)
    */
   updateSettings(settings: Partial<GameSettings>): void {
+    // Sécurité : maxPlayers ne peut jamais dépasser 4
+    if (settings.maxPlayers !== undefined) {
+      settings.maxPlayers = Math.min(settings.maxPlayers, 4);
+    }
+    if (settings.minPlayers !== undefined) {
+      settings.minPlayers = Math.min(settings.minPlayers, 4);
+    }
     this._settings = { ...this._settings, ...settings };
   }
 

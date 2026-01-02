@@ -28,7 +28,7 @@ export interface IGameHistory extends Document {
   // Métadonnées
   duration: number; // en secondes
   totalTurns: number;
-  boardMode: 'FOUR_PLAYERS' | 'SIX_PLAYERS';
+  boardMode: 'FOUR_PLAYERS'; // 4 joueurs uniquement
   
   // Timestamps
   playedAt: Date;
@@ -71,7 +71,8 @@ const GameHistorySchema = new Schema<IGameHistory>(
     },
     boardMode: {
       type: String,
-      enum: ['FOUR_PLAYERS', 'SIX_PLAYERS'],
+      enum: ['FOUR_PLAYERS'], // 4 joueurs uniquement
+      default: 'FOUR_PLAYERS',
       required: true,
     },
     playedAt: {

@@ -3,10 +3,9 @@ import { GAME_PHASE, GAME_STATUS, type GamePhase } from '../constants.js';
 import type { CreateGameOptions, GameState } from '../types/game.js';
 
 /**
- * Configuration spécifique au Parqués
+ * Configuration spécifique au Parqués (4 joueurs uniquement)
  */
 export interface ParquesConfig extends GameConfig {
-  boardType?: 4 | 6; // 4 ou 6 joueurs
   pawnsPerPlayer?: number;
 }
 
@@ -55,23 +54,15 @@ export const PARQUES_PHASE = {
 export type ParquesPhase = typeof PARQUES_PHASE[keyof typeof PARQUES_PHASE];
 
 /**
- * Configuration du plateau
+ * Configuration du plateau (4 joueurs uniquement)
  */
 const BOARD_CONFIG = {
-  4: {
-    totalCells: 68,
-    cellsPerSide: 17,
-    seguros: [0, 7, 17, 24, 34, 41, 51, 58],
-    salidas: [0, 17, 34, 51], // positions de sortie par joueur
-    llegadaCells: 8,
-  },
-  6: {
-    totalCells: 102,
-    cellsPerSide: 17,
-    seguros: [0, 7, 17, 24, 34, 41, 51, 58, 68, 75, 85, 92],
-    salidas: [0, 17, 34, 51, 68, 85],
-    llegadaCells: 8,
-  },
+  totalCells: 68,
+  cellsPerSide: 17,
+  seguros: [0, 7, 17, 24, 34, 41, 51, 58],
+  salidas: [0, 17, 34, 51], // positions de sortie par joueur
+  llegadaCells: 8,
+  maxPlayers: 4,
 } as const;
 
 /**
@@ -82,7 +73,6 @@ export class ParquesGame extends Game {
   private _dice: DiceState = { values: [1, 1], hasRolled: false, rollCount: 0, usedDice: [] };
   private _consecutiveDoubles: number = 0;
   private _prisonAttempts: Map<string, number> = new Map();
-  private _boardType: 4 | 6;
   private _pawnsPerPlayer: number;
   private _parquesPhase: ParquesPhase = PARQUES_PHASE.WAITING_ROLL;
   private _selectedPawnId: number | null = null;
@@ -92,17 +82,16 @@ export class ParquesGame extends Game {
   constructor(options: CreateGameOptions, config: ParquesConfig = {}) {
     super(options, {
       minPlayers: 2,
-      maxPlayers: config.boardType || 4,
+      maxPlayers: 4, // Toujours 4 joueurs maximum
       turnTimeoutMs: config.turnTimeoutMs ?? 60000,
       isPrivate: config.isPrivate,
     });
 
-    this._boardType = config.boardType || 4;
     this._pawnsPerPlayer = config.pawnsPerPlayer || 4;
   }
 
   get boardConfig() {
-    return BOARD_CONFIG[this._boardType];
+    return BOARD_CONFIG;
   }
 
   get dice(): DiceState {

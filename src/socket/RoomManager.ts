@@ -22,23 +22,35 @@ export class RoomManager {
   }
 
   /**
-   * Crée une nouvelle room
+   * Crée une nouvelle room (max 4 joueurs)
    */
   createRoom(settings?: Partial<GameSettings>): GameRoom<Game> {
     const code = this.generateUniqueCode();
+    
+    // Sécurité : limiter maxPlayers à 4 maximum
+    const safeMaxPlayers = settings?.maxPlayers 
+      ? Math.min(settings.maxPlayers, 4) 
+      : DEFAULT_SETTINGS.MAX_PLAYERS;
+    const safeMinPlayers = settings?.minPlayers 
+      ? Math.min(settings.minPlayers, 4) 
+      : DEFAULT_SETTINGS.MIN_PLAYERS;
+
     const defaultSettings: GameSettings = {
-      minPlayers: DEFAULT_SETTINGS.MIN_PLAYERS,
-      maxPlayers: DEFAULT_SETTINGS.MAX_PLAYERS,
+      minPlayers: safeMinPlayers,
+      maxPlayers: safeMaxPlayers,
       turnTimeoutMs: DEFAULT_SETTINGS.TURN_TIMEOUT_MS,
       reconnectTimeoutMs: DEFAULT_SETTINGS.RECONNECT_TIMEOUT_MS,
       isPrivate: false,
       ...settings,
+      // Forcer les limites après le spread
+      maxPlayers: safeMaxPlayers,
+      minPlayers: safeMinPlayers,
     };
 
     const room = new GameRoom<Game>(code, defaultSettings);
     this.rooms.set(code, room);
 
-    console.log(`Room créée: ${code}`);
+    console.log(`Room créée: ${code} (max ${safeMaxPlayers} joueurs)`);
     return room;
   }
 

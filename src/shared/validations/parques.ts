@@ -4,18 +4,16 @@ import { z } from 'zod';
  * Schémas de validation Zod pour le Parqués
  */
 
-// Couleurs des joueurs
+// Couleurs des joueurs (4 joueurs maximum)
 export const PlayerColorSchema = z.enum([
   'red',
   'blue',
   'green',
   'yellow',
-  'orange',
-  'purple',
 ]);
 
-// Mode de plateau
-export const BoardModeSchema = z.enum(['FOUR_PLAYERS', 'SIX_PLAYERS']);
+// Mode de plateau (uniquement 4 joueurs)
+export const BoardModeSchema = z.enum(['FOUR_PLAYERS']);
 
 // État du pion
 export const PawnStateSchema = z.enum([
@@ -54,8 +52,8 @@ export const ParquesSettingsSchema = z.object({
   enableTripleDoubleBonus: z.boolean().default(true),
   enableBlowRule: z.boolean().default(false),
   turnTimeoutMs: z.number().min(10000).max(120000).default(45000),
-  minPlayers: z.number().min(2).max(6).default(2),
-  maxPlayers: z.number().min(2).max(6).default(4),
+  minPlayers: z.number().min(2).max(4).default(2),
+  maxPlayers: z.number().min(2).max(4).default(4),
   isPrivate: z.boolean().default(false),
 });
 
@@ -120,7 +118,7 @@ export const ParquesPlayerStateSchema = z.object({
   pawnsFinished: z.number().min(0).max(4),
   consecutiveDoubles: z.number().min(0).max(3),
   hasWon: z.boolean(),
-  finalRank: z.number().min(1).max(6).nullable(),
+  finalRank: z.number().min(1).max(4).nullable(),
   isHost: z.boolean(),
   isReady: z.boolean(),
   connectionStatus: z.enum(['connected', 'disconnected', 'reconnecting']),
